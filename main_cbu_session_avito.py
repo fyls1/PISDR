@@ -138,8 +138,8 @@ def evaluate_matrix(batch_preds, batch_labels):
                 AP_count += 1
                 AP_value += AP_count / _i
 
-            _ndcg = float(dcg) / ideal_dcg if ideal_dcg != 0 else 0.5
-            _map = float(AP_value) / AP_count if AP_count != 0 else 0.5
+            _ndcg = float(dcg) / ideal_dcg if ideal_dcg != 0 else 0.0
+            _map = float(AP_value) / AP_count if AP_count != 0 else 0.0
         
         batch_ndcg.append(_ndcg)
         batch_map.append(_map)
@@ -240,8 +240,8 @@ def evaluate_matrix_multi(batch_preds, batch_labels, scope_number=[3,5,10,12]):
                     AP_count += 1
                     AP_value += AP_count / _i
 
-            _ndcg = float(dcg) / ideal_dcg if ideal_dcg != 0 else 0.5
-            _map = float(AP_value) / AP_count if AP_count != 0 else 0.5
+            _ndcg = float(dcg) / ideal_dcg if ideal_dcg != 0 else 0.0
+            _map = float(AP_value) / AP_count if AP_count != 0 else 0.0
 
             batch_ndcg[i].append(_ndcg)
             batch_map[i].append(_map)
@@ -432,59 +432,44 @@ def offline_session(sess, agent, dataset, args, epoch=0):
     ini_scores = []
     
     
-    # if args.is_sequence or args.full_sequence:
-    for _, eval_datas in AvitoSessionKTimeActorDataInput(dataset, args.batch_size):
-        batch_datas = get_aggregated_batch4avito_session_k_seq(eval_datas)
-        policy_action = agent.select_action(sess, batch_datas)
-        probs.extend(policy_action)
-        ini_scores.extend(batch_datas["actions"]["single_score_label"])
-        # labels.extend(batch_datas["actions"]["ctr_label"])
-        labels.extend(batch_datas["actions"]["single_ctr_label"])
-        if first:
-            first = False
-            print("prob:", probs)
-            print("label:", labels)
+    if args.is_sequence or args.full_sequence:
+        for _, eval_datas in AvitoSessionKTimeActorDataInput(dataset, args.batch_size):
+            batch_datas = get_aggregated_batch4avito_session_k_seq(eval_datas)
+            policy_action = agent.select_action(sess, batch_datas)
+            probs.extend(policy_action)
+            ini_scores.extend(batch_datas["actions"]["single_score_label"])
+            # labels.extend(batch_datas["actions"]["ctr_label"])
+            labels.extend(batch_datas["actions"]["single_ctr_label"])
+            if first:
+                first = False
+                print("prob:", probs)
+                print("label:", labels)
+    
+            print('EVAL AC:')
+            batch_auc = calculate_bacth_prob_metrix(policy_action, batch_datas["actions"]["single_ctr_label"])
+            batch_init_auc = calculate_bacth_prob_metrix(batch_datas["actions"]["single_score_label"],
+                                                         batch_datas["actions"]["single_ctr_label"])
+    
+            auc_k.append(batch_auc)
+            init_auc_k.append(batch_init_auc)
+    else:
+        for _, eval_datas in AvitoSessionActorDataInput(dataset, args.batch_size):
+            batch_datas = get_aggregated_batch4avito_session(eval_datas)
+            policy_action = agent.select_action(sess, batch_datas)
+            probs.extend(policy_action)
+            ini_scores.extend(batch_datas["actions"]["score_label"])
+            labels.extend(batch_datas["actions"]["ctr_label"])
+            if first:
+                first = False
+                print("prob:", probs)
+                print("label:", labels)
 
-        print('EVAL AC:')
-        batch_auc = calculate_bacth_prob_metrix(policy_action, batch_datas["actions"]["single_ctr_label"])
-        batch_init_auc = calculate_bacth_prob_metrix(batch_datas["actions"]["single_score_label"],
-                                                     batch_datas["actions"]["single_ctr_label"])
+            # print('EVAL AC:')
+            batch_auc = calculate_bacth_prob_metrix(policy_action, batch_datas["actions"]["ctr_label"])
+            batch_init_auc = calculate_bacth_prob_metrix(batch_datas["actions"]["score_label"],batch_datas["actions"]["ctr_label"])
 
-        auc_k.append(batch_auc)
-        init_auc_k.append(batch_init_auc)
-    # else:
-    #     for user_pvid, eval_datas in CBUSessionActorDataInput(dataset, args.batch_size):
-    #         batch_datas = get_aggregated_batch4cbu_session(eval_datas)
-    #         policy_action = agent.select_action(sess, batch_datas)
-    #         probs.extend(policy_action)
-    #         labels.extend(batch_datas["actions"]["ctr_label"])
-    #         if first:
-    #             first = False
-    #             print("prob:", probs)
-    #             print("label:", labels)
-    #
-    #         if args.show_item_index:
-    #             item_spare = batch_datas["states"]["item_spare_feature"]
-    #             for i in range(len(item_spare)):
-    #                 print("user/pvid:", user_pvid[i])
-    #                 origin_list = item_spare[i, :, 0]
-    #                 print("Origin item list:", origin_list)
-    #                 final_list = sorted(range(12), key=lambda k: policy_action[i][k])
-    #                 print("Final item list:", np.array(origin_list)[final_list].tolist())
-    #                 print("Origin click:", batch_datas["actions"]["ctr_label"][i])
-    #
-    #         batch_auc = calculate_bacth_prob_metrix(policy_action, batch_datas["actions"]["ctr_label"])
-    #         batch_init_auc = calculate_bacth_prob_metrix(batch_datas["actions"]["score_label"], batch_datas["actions"]["ctr_label"])
-    #         mean_ndcg, mean_map = evaluate_matrix(batch_preds=policy_action, batch_labels=batch_datas["actions"]["ctr_label"])
-    #         init_ndcg, init_map = evaluate_matrix(batch_preds=batch_datas["actions"]["score_label"], batch_labels=batch_datas["actions"]["ctr_label"])
-    #
-    #         auc_k.append(batch_auc)
-    #         init_auc_k.append(batch_init_auc)
-    #
-    #         ndcg_k.append(mean_ndcg)
-    #         map_k.append(mean_map)
-    #         init_ndcg_k.append(init_ndcg)
-    #         init_map_k.append(init_map)
+            auc_k.append(batch_auc)
+            init_auc_k.append(batch_init_auc)
 
     
     # k_scope = [1,3,5,10,12]
